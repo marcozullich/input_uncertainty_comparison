@@ -4,7 +4,9 @@ import os
 
 import keras
 from keras_uncertainty.models import StochasticClassifier, DeepEnsembleClassifier
+from keras_uncertainty.layers import add_gradient_penalty, add_l2_regularization
 
+import tensorflow as tf
 from tensorflow.keras.datasets import fashion_mnist
 
 import utils.preact_resnet18_bayes as pa18
@@ -73,8 +75,13 @@ def train_dropconnect_model(x_train_with_noise, y_train, x_test_with_noise, y_te
     return model_mc
 
 def train_flipout_model(x_train_with_noise, y_train, x_test_with_noise, y_test, epochs=15, batch_size=256):
-    num_batches = len(x_train_with_noise) // batch_size + (0 if len(x_train_with_noise) % batch_size == 0 else 1)
-    model = pa18.get_flipout_preact_resnet18(x_train[0].shape, num_batches)
+    # num_batches = len(x_train_with_noise) // batch_size + (0 if len(x_train_with_noise) % batch_size == 0 else 1)
+    prior_params = {
+        'prior_sigma_1': 5.0, 
+        'prior_sigma_2': 2.0, 
+        'prior_pi': 0.5
+    }
+    model = pa18.get_flipout_preact_resnet18(x_train[0].shape, batch_size=batch_size, prior_params=prior_params)
     model.compile(loss="categorical_crossentropy", optimizer="adam", metrics=["accuracy"])
     history = model.fit(x_train_with_noise, y_train, verbose=1, epochs=epochs, batch_size=batch_size)
     train_accuracy = history.history["accuracy"][-1]
@@ -102,7 +109,20 @@ def train_ensemble_model(x_train_with_noise, y_train, x_test_with_noise, y_test,
     logging.info(f"Ensemble, Train accuracy: -- , Test accuracy: {test_accuracy:.4f}")
     
 
+def train_duq_model(x_train_with_noise, y_train, x_test_with_noise, y_test, epochs=15, batch_size=256):
+    model = pa18.get_duq_preact_resnet18(x_train[0].shape)
+    model.compile(loss="categorical_crossentropy", optimizer="adam", metrics=["accuracy"])
+    # add_gradient_penalty(model, lambda_coeff=0.5)
+    # add_l2_regularization(model)
+    history = model.fit(x_train_with_noise, y_train, verbose=1, epochs=epochs, batch_size=batch_size)
+    train_accuracy = history.history["accuracy"][-1]
 
+    history = model.evaluate(x_test_with_noise, y_test)
+    test_accuracy = history[1]
+
+    logging.info(f"DUQ, Train accuracy: {train_accuracy:.4f}, Test accuracy: {test_accuracy:.4f}")
+
+    return model
 
 STD_TRAIN = 0.1
 STD_TEST = [0.0, 0.1, 0.2, 0.3]
@@ -113,6 +133,8 @@ WEIGHTS_SAVE_FOLDER = "weights"
 if __name__ == "__main__":
     # args = parse_args()
     # print(args)
+    tf.compat.v1.disable_eager_execution()
+
 
     logging.basicConfig(
         filename="logging.log",
@@ -129,20 +151,23 @@ if __name__ == "__main__":
     noise_train = get_noise(x_train.shape, noise_level)
     noise_test = get_noise(x_test.shape, noise_level)
     
-    # standard = train_standard_model((x_train, noise_train), y_train, (x_test, noise_test), y_test)
-    # standard.save_weights(os.path.join(WEIGHTS_SAVE_FOLDER, "standard.weights"))
+    standard = train_standard_model((x_train, noise_train), y_train, (x_test, noise_test), y_test)
+    standard.save_weights(os.path.join(WEIGHTS_SAVE_FOLDER, "standard.weights"))
 
-    dropout = train_dropout_model((x_train, noise_train), y_train, (x_test, noise_test), y_test)
-    dropout.model.save_weights(os.path.join(WEIGHTS_SAVE_FOLDER, "dropout.weights"))
+    # dropout = train_dropout_model((x_train, noise_train), y_train, (x_test, noise_test), y_test)
+    # dropout.model.save_weights(os.path.join(WEIGHTS_SAVE_FOLDER, "dropout.weights"))
 
-    dropconn = train_dropconnect_model((x_train, noise_train), y_train, (x_test, noise_test), y_test)
-    dropconn.model.save_weights(os.path.join(WEIGHTS_SAVE_FOLDER, "dropconn.weights"))
+    # dropconn = train_dropconnect_model((x_train, noise_train), y_train, (x_test, noise_test), y_test)
+    # dropconn.model.save_weights(os.path.join(WEIGHTS_SAVE_FOLDER, "dropconn.weights"))
 
     # flip = train_flipout_model((x_train, noise_train), y_train, (x_test, noise_test), y_test)
-    # flip.save_weights("filpout.weights")
+    # flip.model.save_weights(os.path.join(WEIGHTS_SAVE_FOLDER, "flipout.weights"))
 
     # ensemble = train_ensemble_model((x_train, noise_train), y_train, (x_test, noise_test), y_test)
-    # ensemble.save_weights("ensemble.weights")
+    # ensemble.save_weights(os.path.join(WEIGHTS_SAVE_FOLDER, "ensemble.weights"))
+
+    # duq = train_duq_model((x_train, noise_train), y_train, (x_test, noise_test), y_test)
+    # duq.save_weights(os.path.join(WEIGHTS_SAVE_FOLDER, "duq.weights"))
 
 
     

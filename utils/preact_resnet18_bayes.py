@@ -1,7 +1,7 @@
 from utils.preact_resnet18 import two_inputs_preact_resnet18
 
 from keras.layers import Conv2D
-from keras_uncertainty.layers import DropConnectConv2D, VariationalConv2D, FlipoutConv2D, StochasticDropout
+from keras_uncertainty.layers import DropConnectConv2D, VariationalConv2D, FlipoutConv2D, StochasticDropout, DropConnectDense, FlipoutDense
 
 from typing import List
 
@@ -20,14 +20,17 @@ def get_standard_preact_resnet18(input_shape, num_classes:int=10):
     return two_inputs_preact_resnet18(input_shape, Conv2D, num_classes)
 
 def get_dropout_preact_resnet18(input_shape, num_classes:int=10, p_drop=0.1):
-    return two_inputs_preact_resnet18(input_shape, lambda filters, kernel_size, strides, padding : DropoutConv2D(filters, strides=strides, kernel_size=kernel_size, padding=padding, p_drop=p_drop), num_classes)
+    return two_inputs_preact_resnet18(input_shape, lambda filters, kernel_size, strides, padding : DropoutConv2D(filters, strides=strides, kernel_size=kernel_size, padding=padding, p_drop=p_drop), num_classes, lightweight_version=True)
 
 def get_dropconnect_preact_resnet18(input_shape, num_classes:int=10, p_drop:float=0.05):
-    return two_inputs_preact_resnet18(input_shape, lambda filters, kernel_size, strides, padding : DropConnectConv2D(filters, strides=strides, kernel_size=kernel_size, padding=padding, prob=p_drop), num_classes)
+    return two_inputs_preact_resnet18(input_shape, lambda filters, kernel_size, strides, padding : DropConnectConv2D(filters, strides=strides, kernel_size=kernel_size, padding=padding, prob=p_drop), num_classes, lightweight_version=True)
 
-def get_flipout_preact_resnet18(input_shape, num_batches:int, num_classes:int=10):
-    kl_weight = 1.0 / num_batches
-    return two_inputs_preact_resnet18(input_shape, lambda filters, kernel_size, strides, padding : VariationalConv2D(filters, strides=strides, kernel_size=kernel_size, padding=padding, kl_weight=kl_weight), num_classes)
+def get_flipout_preact_resnet18(input_shape, batch_size:int, prior_params:dict, num_classes:int=10):
+    kl_weight = 1.0 / batch_size
+    return two_inputs_preact_resnet18(input_shape, lambda filters, kernel_size, strides, padding : FlipoutConv2D(filters, strides=strides, kernel_size=kernel_size, padding=padding, kl_weight=kl_weight), num_classes, lightweight_version=True)
+
+def get_duq_preact_resnet18(input_shape, num_classes:int=10):
+    return two_inputs_preact_resnet18(input_shape, Conv2D, num_classes, lightweight_version=True, output_head="duq")
 
 # def get_ensemble_preact_resnet18(input_shape, n_components:int, loss:str="categorical_crossentropy", optimizer:str="adam", metrics:List[str]=["accuracy"], num_classes:int=10):
 #     def model_fn():
